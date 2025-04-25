@@ -1,0 +1,30 @@
+[build]
+  base = "skillpath-ai"
+  command = "npm run build"
+  publish = "build"
+
+[build.environment]
+  REACT_APP_ENABLE_WEBHOOK = "false"
+
+# Production context: all deploys from the Production branch set in your site's
+# deploy contexts will inherit these settings.
+[context.production.environment]
+  REACT_APP_ENABLE_WEBHOOK = "false"
+  # REACT_APP_N8N_WEBHOOK_URL = "" # To be set in Netlify UI
+
+# Deploy Preview context: all deploys generated from a pull/merge request will
+# inherit these settings.
+[context.deploy-preview.environment]
+  REACT_APP_ENABLE_WEBHOOK = "false"
+
+# Branch Deploy context: all deploys that are not from a pull/merge request or
+# from the Production branch will inherit these settings.
+[context.branch-deploy.environment]
+  REACT_APP_ENABLE_WEBHOOK = "false"
+
+# Redirects and headers are GLOBAL for all builds – they do not get scoped to
+# contexts no matter where you define them in the file.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
