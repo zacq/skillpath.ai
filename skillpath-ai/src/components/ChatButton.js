@@ -6,11 +6,14 @@ import {
   Input,
   IconButton,
   VStack,
-  useDisclosure
+  useDisclosure,
+  Spinner
 } from '@chakra-ui/react';
 import { keyframes } from '@emotion/react';
 import { FaRobot, FaTimes } from 'react-icons/fa';
 import { IoMdSend } from 'react-icons/io';
+import { sendMessageToWebhook } from '../services/webhookService';
+import { config } from '../config';
 
 // Pulse animation
 const pulseAnimation = keyframes`
@@ -28,6 +31,8 @@ const ChatButton = () => {
     }
   ]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to bottom of messages
@@ -40,28 +45,65 @@ const ChatButton = () => {
   }, [messages]);
 
   // Handle sending a message
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!input.trim()) return;
 
+    // Clear any previous errors
+    setError(null);
+
     // Add user message
-    const newMessages = [...messages, { text: input, sender: 'user' }];
+    const userMessage = input.trim();
+    const newMessages = [...messages, { text: userMessage, sender: 'user' }];
     setMessages(newMessages);
     setInput('');
 
-    // Simulate bot response
-    setTimeout(() => {
-      const botResponses = [
-        "That's a great question about your career path. Have you considered exploring your strengths and values first?",
-        "I understand your concerns. Many professionals face similar challenges when transitioning to a new field.",
-        "Based on what you've shared, you might want to look into roles that combine your technical skills with your interest in helping others.",
-        "Learning new skills is always valuable. Have you thought about which specific skills would most benefit your career goals?",
-        "It sounds like you're at an important crossroads. Let's break down your options and see which aligns best with your long-term vision."
-      ];
+    // Set loading state
+    setIsLoading(true);
 
-      const randomResponse = botResponses[Math.floor(Math.random() * botResponses.length)];
+    try {
+      let botResponse;
 
-      setMessages([...newMessages, { text: randomResponse, sender: 'bot' }]);
-    }, 1000);
+      // Check if webhook integration is enabled
+      if (config.enableWebhook) {
+        try {
+          // Send message to webhook
+          const webhookResponse = await sendMessageToWebhook(userMessage, 'user');
+
+          // Use response from webhook if available
+          if (webhookResponse && webhookResponse.response) {
+            botResponse = webhookResponse.response;
+          } else {
+            // Fallback to default responses if webhook doesn't return a valid response
+            botResponse = getRandomBotResponse();
+          }
+        } catch (webhookError) {
+          console.error('Webhook error:', webhookError);
+          // Fallback to default responses if webhook fails
+          botResponse = getRandomBotResponse();
+        }
+      } else {
+        // Use default responses if webhook is not enabled
+        botResponse = getRandomBotResponse();
+      }
+
+      // Add bot response to messages
+      setTimeout(() => {
+        setMessages([...newMessages, { text: botResponse, sender: 'bot' }]);
+        setIsLoading(false);
+      }, 1000); // Slight delay for natural feel
+
+    } catch (err) {
+      console.error('Error in handleSendMessage:', err);
+      setError('Failed to send message. Please try again.');
+      setIsLoading(false);
+    }
+  };
+
+  // Get a random bot response from the default responses
+  const getRandomBotResponse = () => {
+    return config.defaultBotResponses[
+      Math.floor(Math.random() * config.defaultBotResponses.length)
+    ];
   };
 
   return (
@@ -137,6 +179,22 @@ const ChatButton = () => {
               <Text>{message.text}</Text>
             </Box>
           ))}
+
+          {/* Loading indicator */}
+          {isLoading && (
+            <Flex alignSelf="flex-start" align="center" bg="gray.100" p={3} borderRadius="lg">
+              <Spinner size="sm" mr={2} color="brand.500" />
+              <Text fontSize="sm">Bot is typing...</Text>
+            </Flex>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <Box alignSelf="center" bg="red.100" color="red.700" p={2} borderRadius="md">
+              <Text fontSize="sm">{error}</Text>
+            </Box>
+          )}
+
           <div ref={messagesEndRef} />
         </VStack>
 
@@ -147,13 +205,16 @@ const ChatButton = () => {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
             mr={2}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+            isDisabled={isLoading}
           />
           <IconButton
-            icon={<IoMdSend />}
+            icon={isLoading ? <Spinner size="sm" /> : <IoMdSend />}
             colorScheme="brand"
             onClick={handleSendMessage}
             aria-label="Send message"
+            isDisabled={isLoading || !input.trim()}
+            isLoading={isLoading}
           />
         </Flex>
       </Box>
